@@ -88,8 +88,11 @@ class ShaderInterpreter(Transformer):
     # Atoms
     def var(self, args):
         name = str(args[0])
-        if name in ["x", "y", "z", "time"]:
-            return self.vars.get(name, 0.0)
+        return self.vars.get(name, 0.0)
+
+    def const_var(self, args):
+        print("const_var called with args:", args)
+        name = str(args[0])
         return self.vars.get(name, 0.0)
 
     def material(self, args):

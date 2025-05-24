@@ -29,12 +29,12 @@ expr_stmt: expr ";"
 
 func_call: ("sin"|"cos"|"noise") "(" [expr ("," expr)*] ")"
 
-const_atom: "x" -> var
-          | "y" -> var
-          | "z" -> var
-          | "time" -> var
-
 var_atom: NAME -> var
+const_atom: "x" -> const_var
+          | "y" -> const_var 
+          | "z" -> const_var
+          | "time" -> const_var
+
 material_atom: MATERIAL -> material
 
 MATERIAL: "air"|"stone"|"water"|"grass"|"crystal"
