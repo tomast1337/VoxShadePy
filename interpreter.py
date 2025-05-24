@@ -6,9 +6,8 @@ with open("voxel_grammar.lark") as f:
 
 
 class ReturnSignal(Exception):
-    """Signal to break out of execution when return is encountered"""
-
-    pass
+    def __init__(self, value):
+        self.value = value
 
 
 MATERIALS = {
@@ -32,10 +31,11 @@ MATERIALS = {
 
 
 class ShaderInterpreter(Transformer):
+
     def __init__(self):
         self.vars = {"x": 0.0, "y": 0.0, "z": 0.0, "time": 0.0}
         self.return_value = None
-        self.should_return = False
+        self.return_encountered = False  # New flag to track returns
 
     # Constant variables
     def x_var(self, args):
@@ -50,25 +50,15 @@ class ShaderInterpreter(Transformer):
     def time_var(self, args):
         return self.vars["time"]
 
-    # Regular variable
-
+    # Variable and material handling
     def var(self, args):
-        """Handle regular variables"""
         if not args:
             return 0.0
         name = str(args[0])
-        if name in MATERIALS:
-            # This shouldn't happen with the updated grammar
-            print(f"Warning: Material '{name}' processed as variable")
-            return name
-        print(f"Variable lookup: {name} -> {self.vars.get(name, 0.0)}")
         return self.vars.get(name, 0.0)
 
     def material(self, args):
-        """Handle material tokens directly"""
-        material_name = str(args[0])
-        print(f"Material received: {material_name}")
-        return material_name
+        return str(args[0])
 
     # Built-in functions
     def sin(self, args):
@@ -84,48 +74,27 @@ class ShaderInterpreter(Transformer):
         return np.fmod(np.sin(x + y) * 43758.5453, 1.0)
 
     # Expression handling
-
     def comp_expr(self, args):
         if len(args) == 1:
             return args[0]
         left = args[0]
         for i in range(1, len(args), 2):
-            op_tree = args[i]
-            right = args[i + 1]
-
-            # Extract the actual operator string
-            op = op_tree.children[0] if hasattr(op_tree, "children") else str(op_tree)
-
-            # Convert to numbers if needed
-            left_num = (
-                float(left)
-                if isinstance(left, (int, float, str))
-                and str(left).replace(".", "", 1).isdigit()
-                else left
-            )
-            right_num = (
-                float(right)
-                if isinstance(right, (int, float, str))
-                and str(right).replace(".", "", 1).isdigit()
-                else right
-            )
-
+            op, right = args[i], args[i + 1]
             if op == "==":
-                result = left_num == right_num
+                result = left == right
             elif op == "!=":
-                result = left_num != right_num
+                result = left != right
             elif op == "<":
-                result = left_num < right_num
+                result = left < right
             elif op == ">":
-                result = left_num > right_num
+                result = left > right
             elif op == "<=":
-                result = left_num <= right_num
+                result = left <= right
             elif op == ">=":
-                result = left_num >= right_num
+                result = left >= right
             else:
                 result = False
-
-            left = result  # For chained comparisons
+            left = result
         return left
 
     def arith_expr(self, args):
@@ -148,53 +117,39 @@ class ShaderInterpreter(Transformer):
                 result /= num
         return result
 
-    # Statements
+    # Control flow
     def if_stmt(self, args):
-        if len(args) != 2:
+        if len(args) != 2 or self.return_encountered:
             return
         condition, block = args
         if condition:
-            # Execute the block and capture any return value
             self.transform(block)
 
     def block(self, args):
-        """Execute block statements with return tracking"""
         for stmt in args:
-            self.transform(stmt)
-            if self.should_return:
+            if self.return_encountered:
                 break
+            self.transform(stmt)
 
     def return_stmt(self, args):
-        """Process return statements with proper type handling"""
-        if not args:
-            self.return_value = "air"
-            return
-
-        return_value = args[0]
-        print(f"Raw return value: {return_value} (type: {type(return_value)})")
-
-        # Handle all string returns (both materials and other strings)
-        if isinstance(return_value, str):
-            self.return_value = return_value
-        else:
-            # Convert numbers to strings
-            self.return_value = str(return_value)
-
-        print(f"Final return value set to: {self.return_value}")
-        self.should_return = True
+        if not self.return_encountered:  # Only process first return
+            self.return_value = args[0] if args else "air"
+            self.return_encountered = True
+        return self.return_value  # Return normally but set flag
 
     def assign_stmt(self, args):
         var_name, value = args
-        if var_name not in ["x", "y", "z", "time"]:  # Prevent overwriting constants
+        if var_name not in ["x", "y", "z", "time"]:
             self.vars[var_name] = value
 
-    # Tokens
+    # Token handling
     def NUMBER(self, token):
         return float(token.value)
 
     def NAME(self, token):
         return str(token.value)
 
+    # Operators
     def eq_op(self, args):
         return "=="
 
@@ -213,12 +168,8 @@ class ShaderInterpreter(Transformer):
     def gte_op(self, args):
         return ">="
 
-    def transform(self, tree):
-        print(f"Transforming: {tree}")
-        return super().transform(tree)
 
-
-def run_shader(code, x: float = 0, y: float = 0, z: float = 0, time: float = 0):
+def run_shader(code, x=0, y=0, z=0, time=0):
     parser = Lark(GRAMMAR, parser="lalr")
     interpreter = ShaderInterpreter()
     interpreter.vars.update(
@@ -226,7 +177,7 @@ def run_shader(code, x: float = 0, y: float = 0, z: float = 0, time: float = 0):
     )
     tree = parser.parse(code)
     interpreter.transform(tree)
-    return interpreter.return_value or "air"
+    return interpreter.return_value if interpreter.return_encountered else "air"
 
 
 def test_shader():

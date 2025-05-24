@@ -51,7 +51,7 @@ comp_op: "==" -> eq_op
 add_op: "+"|"-"
 mul_op: "*"|"/"
 
-NAME: /[a-zA-Z_][a-zA-Z0-9_]*/
+NAME: /(?!(air|stone|water|grass|crystal|sand|wood|metal|lava|ice|dirt|snow|cloud|glass|brick|obsidian)\b)[a-zA-Z_][a-zA-Z0-9_]*/
 NUMBER: /-?\d+(\.\d+)?/
 
 %ignore /\s+/
