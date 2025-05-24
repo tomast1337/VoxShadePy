@@ -31,10 +31,11 @@ MATERIALS = {
 
 
 class ShaderInterpreter(Transformer):
+
     def __init__(self):
         self.vars = {"x": 0.0, "y": 0.0, "z": 0.0, "time": 0.0}
-        self.result_stack = []
-        self.skip_level = None
+        self.result = None
+        self.execution_stack = []
 
     def log(self, *args):
         if self.debug:
@@ -122,32 +123,37 @@ class ShaderInterpreter(Transformer):
 
     # Control flow
     def if_stmt(self, args):
-        if self.skip_level is not None:
+        if self.result is not None:
             return
 
         condition, block = args
-        if not condition:
-            # Skip this entire block
-            self.skip_level = len(self.result_stack)
+        if condition:
+            self.execution_stack.append(True)
             self.transform(block)
-            self.skip_level = None
+            self.execution_stack.pop()
         else:
-            self.transform(block)
+            self.execution_stack.append(False)
+            self.transform(block)  # Still parse for syntax checking
+            self.execution_stack.pop()
 
     def block(self, args):
-        if self.skip_level is not None and len(self.result_stack) >= self.skip_level:
+        if self.result is not None:
             return
-            
+
+        # Check if current execution context is active
+        if len(self.execution_stack) > 0 and not self.execution_stack[-1]:
+            return
+
         for stmt in args:
             self.transform(stmt)
-            if len(self.result_stack) > 0:  # Found a return
+            if self.result is not None:
                 break
 
     def return_stmt(self, args):
-        if self.skip_level is not None and len(self.result_stack) >= self.skip_level:
-            return
-
-        self.result_stack.append(args[0] if args else "air")
+        # Only return if we're in an active execution context
+        if len(self.execution_stack) == 0 or self.execution_stack[-1]:
+            if self.result is None:
+                self.result = args[0] if args else "air"
 
     def assign_stmt(self, args):
         var_name, value = args
@@ -187,7 +193,7 @@ def run_shader(code, x=0, y=0, z=0, time=0):
     parser = Lark(GRAMMAR, parser="lalr")
     tree = parser.parse(code)
     interpreter.transform(tree)
-    return interpreter.result_stack[-1] if interpreter.result_stack else "air"
+    return interpreter.result if interpreter.result is not None else "air"
 
 
 def test_chained_ifs():
