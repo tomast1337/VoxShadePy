@@ -31,11 +31,10 @@ MATERIALS = {
 
 
 class ShaderInterpreter(Transformer):
-
     def __init__(self):
         self.vars = {"x": 0.0, "y": 0.0, "z": 0.0, "time": 0.0}
-        self.return_stack = []
-        self.debug = True
+        self.result_stack = []
+        self.skip_level = None
 
     def log(self, *args):
         if self.debug:
@@ -123,22 +122,32 @@ class ShaderInterpreter(Transformer):
 
     # Control flow
     def if_stmt(self, args):
+        if self.skip_level is not None:
+            return
+
         condition, block = args
-        if condition:
-            # Execute block and capture if it returned
-            returned = self.transform(block)
-            if returned is not None:  # If block contained a return statement
-                return returned
+        if not condition:
+            # Skip this entire block
+            self.skip_level = len(self.result_stack)
+            self.transform(block)
+            self.skip_level = None
+        else:
+            self.transform(block)
 
     def block(self, args):
+        if self.skip_level is not None and len(self.result_stack) >= self.skip_level:
+            return
+            
         for stmt in args:
-            result = self.transform(stmt)
-            if result is not None:  # If statement was a return
-                return result
-        return None
+            self.transform(stmt)
+            if len(self.result_stack) > 0:  # Found a return
+                break
 
     def return_stmt(self, args):
-        return args[0] if args else "air"
+        if self.skip_level is not None and len(self.result_stack) >= self.skip_level:
+            return
+
+        self.result_stack.append(args[0] if args else "air")
 
     def assign_stmt(self, args):
         var_name, value = args
@@ -174,13 +183,11 @@ class ShaderInterpreter(Transformer):
 
 def run_shader(code, x=0, y=0, z=0, time=0):
     interpreter = ShaderInterpreter()
-    interpreter.vars.update(
-        {"x": float(x), "y": float(y), "z": float(z), "time": float(time)}
-    )
+    interpreter.vars.update({"x": x, "y": y, "z": z, "time": time})
     parser = Lark(GRAMMAR, parser="lalr")
     tree = parser.parse(code)
-    result = interpreter.transform(tree)
-    return result if result is not None else "air"
+    interpreter.transform(tree)
+    return interpreter.result_stack[-1] if interpreter.result_stack else "air"
 
 
 def test_chained_ifs():
