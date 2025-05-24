@@ -22,8 +22,8 @@ expr_stmt: expr ";"
 
 ?factor: func_call
         | const_var
-        | var
         | material
+        | var
         | NUMBER
         | "(" expr ")"
 
@@ -35,8 +35,6 @@ const_var: "x" -> x_var
          | "time" -> time_var
 
 var: NAME -> var
-
-material_expr: material
 
 material: MATERIAL -> material
 MATERIAL: "air"|"stone"|"water"|"grass"|"crystal"

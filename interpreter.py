@@ -51,25 +51,24 @@ class ShaderInterpreter(Transformer):
         return self.vars["time"]
 
     # Regular variable
+
     def var(self, args):
+        """Handle regular variables"""
         if not args:
             return 0.0
         name = str(args[0])
+        if name in MATERIALS:
+            # This shouldn't happen with the updated grammar
+            print(f"Warning: Material '{name}' processed as variable")
+            return name
+        print(f"Variable lookup: {name} -> {self.vars.get(name, 0.0)}")
         return self.vars.get(name, 0.0)
 
-    def material_expr(self, args):
-        """Handle material expressions explicitly"""
-        if not args:
-            return "air"
-        return args[0]  # Return the material name directly
-
     def material(self, args):
-        """Convert material token to string"""
-        if not args:
-            return "air"
+        """Handle material tokens directly"""
         material_name = str(args[0])
-        print(f"Material resolved: {material_name}")
-        return material_name  # Return as plain string
+        print(f"Material received: {material_name}")
+        return material_name
 
     # Built-in functions
     def sin(self, args):
@@ -174,14 +173,11 @@ class ShaderInterpreter(Transformer):
         return_value = args[0]
         print(f"Raw return value: {return_value} (type: {type(return_value)})")
 
-        # Handle material returns
-        if isinstance(return_value, str) and return_value in MATERIALS:
+        # Handle all string returns (both materials and other strings)
+        if isinstance(return_value, str):
             self.return_value = return_value
-        # Handle numeric returns
-        elif isinstance(return_value, (int, float)):
-            self.return_value = str(return_value)
-        # Handle all other cases
         else:
+            # Convert numbers to strings
             self.return_value = str(return_value)
 
         print(f"Final return value set to: {self.return_value}")
@@ -216,6 +212,10 @@ class ShaderInterpreter(Transformer):
 
     def gte_op(self, args):
         return ">="
+
+    def transform(self, tree):
+        print(f"Transforming: {tree}")
+        return super().transform(tree)
 
 
 def run_shader(code, x: float = 0, y: float = 0, z: float = 0, time: float = 0):
