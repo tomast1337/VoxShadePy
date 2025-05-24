@@ -21,27 +21,33 @@ expr_stmt: expr ";"
 ?term_expr: factor (mul_op factor)*
 
 ?factor: func_call
-        | const_atom
-        | var_atom
-        | material_atom
+        | const_var
+        | var
+        | material
         | NUMBER
         | "(" expr ")"
 
 func_call: ("sin"|"cos"|"noise") "(" [expr ("," expr)*] ")"
 
-var_atom: NAME -> var
-const_atom: "x" -> const_var
-          | "y" -> const_var 
-          | "z" -> const_var
-          | "time" -> const_var
+const_var: "x" -> x_var
+         | "y" -> y_var
+         | "z" -> z_var
+         | "time" -> time_var
 
-material_atom: MATERIAL -> material
+var: NAME -> var
+material: MATERIAL -> material
 
 MATERIAL: "air"|"stone"|"water"|"grass"|"crystal"
          |"sand"|"wood"|"metal"|"lava"|"ice"
          |"dirt"|"snow"|"cloud"|"glass"|"brick"|"obsidian"
 
-comp_op: "=="|"!="|"<"|">"|"<="|">="
+comp_op: "==" -> eq_op
+       | "!=" -> neq_op
+       | "<" -> lt_op
+       | ">" -> gt_op
+       | "<=" -> lte_op
+       | ">=" -> gte_op
+
 add_op: "+"|"-"
 mul_op: "*"|"/"
 
