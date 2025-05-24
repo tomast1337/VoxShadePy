@@ -6,47 +6,42 @@
           | expr_stmt
 
 if_stmt: "if" expr block
-block:  "{" statement* "}"
+block: "{" statement* "}"
 
 return_stmt: "return" expr ";"
 assign_stmt: NAME "=" expr ";"
 expr_stmt: expr ";"
 
 ?expr: logic
-
 ?logic: arith (comp_op arith)?  -> compare
-
 ?arith: arith "+" term          -> add
-      | arith "-" term          -> sub
-      | term
-
+       | arith "-" term          -> sub
+       | term
 ?term: term "*" factor          -> mul
-     | term "/" factor          -> div
-     | factor
-
+      | term "/" factor          -> div
+      | factor
 ?factor: func_call
-       | atom
+        | const_atom
+        | var_atom
+        | material_atom
+        | "(" expr ")"
 
-func_call: NAME "(" [expr ("," expr)*] ")"
+func_call: ("sin"|"cos"|"noise") "(" [expr ("," expr)*] ")"
 
-?atom: NUMBER                   -> number
-     | MATERIAL                -> var
-     | NAME                    -> var
-     | "(" expr ")"
+const_atom: "x" -> var
+          | "y" -> var
+          | "z" -> var
+          | "time" -> var
 
-comp_op: "==" | "!=" | "<" | ">" | "<=" | ">="
+var_atom: NAME -> var
+material_atom: MATERIAL -> material
 
-MATERIAL: "air" | "stone" | "water" | "grass" | "crystal"
+MATERIAL: "air"|"stone"|"water"|"grass"|"crystal"
+         |"sand"|"wood"|"metal"|"lava"|"ice"
+         |"dirt"|"snow"|"cloud"|"glass"|"brick"|"obsidian"
 
-X: "x"
-Y: "y"
-Z: "z"
-TIME: "time"
-IF: "if"
-RETURN: "return"
-
+comp_op: "=="|"!="|"<"|">"|"<="|">="
 NAME: /[a-zA-Z_][a-zA-Z0-9_]*/
-
 NUMBER: /-?\d+(\.\d+)?/
 
 %ignore /\s+/

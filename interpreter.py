@@ -1,125 +1,116 @@
-from lark import Transformer, Lark
-import math
-
-MATERIALS = {"air", "stone", "water", "grass", "crystal"}
-
-
-class EvalError(Exception):
-    pass
-
-
-class EvalTransformer(Transformer):
-    def __init__(self, env):
-        super().__init__()
-        self.env = env  # variable context
-        self.returned = None
-
-    def number(self, token):
-        return float(token[0])
-
-    def var(self, token):
-        name = str(token[0])
-        if name in self.env:
-            return self.env[name]
-        elif name in MATERIALS:
-            return name
-        raise EvalError(f"Unknown variable: {name}")
-
-    def add(self, items):
-        return items[0] + items[1]
-
-    def sub(self, items):
-        return items[0] - items[1]
-
-    def mul(self, items):
-        return items[0] * items[1]
-
-    def div(self, items):
-        return items[0] / items[1]
-
-    def comp_op(self, items):
-        if not items:
-            return None
-        return str(items[0])
-
-    def compare(self, items):
-        if len(items) == 1:
-            return items[0]
-        left, op, right = items
-        if op is None:
-            return left
-        try:
-            return {
-                "==": left == right,
-                "!=": left != right,
-                "<": left < right,
-                ">": left > right,
-                "<=": left <= right,
-                ">=": left >= right,
-            }[op]
-        except KeyError:
-            raise EvalError(f"Unknown comparison operator: {op}")
-
-    def func_call(self, items):
-        name = str(items[0])
-        args = items[1:]
-        if name in {"sin", "cos", "abs", "floor"}:
-            return getattr(math, name)(*args)
-        raise EvalError(f"Unknown function: {name}")
-
-    def assign_stmt(self, items):
-        name = str(items[0])
-        value = items[1]
-        self.env[name] = value
-
-    def expr_stmt(self, items):
-        pass  # Evaluate but discard
-
-    def return_stmt(self, items):
-        self.returned = items[0]
-
-    def if_stmt(self, items):
-        condition = items[0]
-        block = items[1]
-        if condition:
-            for stmt in block:
-                if self.returned is not None:
-                    break
-
-    def block(self, items):
-        return items
-
-    def start(self, items):
-        return items
-
-    def X(self, _):
-        return self.env["x"]
-
-    def Y(self, _):
-        return self.env["y"]
-
-    def Z(self, _):
-        return self.env["z"]
-
-    def TIME(self, _):
-        return self.env["time"]
-
-    def IF(self, _):
-        return "if"
-
-    def RETURN(self, _):
-        return "return"
-
+from lark import Lark, Transformer, v_args
+import numpy as np
 
 with open("voxel_grammar.lark") as f:
-    grammar = f.read()
-
-parser = Lark(grammar, parser="lalr")
+    GRAMMAR = f.read()
 
 
-def run(code, x, y, z, time):
+# Interpreter implementation
+class ShaderInterpreter(Transformer):
+    def __init__(self):
+        self.vars = {}
+        self.return_value = None
+        self.should_return = False
+
+    # Built-in functions
+    def sin(self, args):
+        return math.sin(args[0])
+
+    def cos(self, args):
+        return math.cos(args[0])
+
+    def noise(self, args):
+        # Simple deterministic pseudo-noise
+        x, y, *rest = args
+        x *= 12.9898
+        y *= 78.233
+        return math.fmod(math.sin(x + y) * 43758.5453, 1.0)
+
+    # Operations
+    def add(self, args):
+        return args[0] + args[1]
+
+    def sub(self, args):
+        return args[0] - args[1]
+
+    def mul(self, args):
+        return args[0] * args[1]
+
+    def div(self, args):
+        return args[0] / args[1]
+
+    def compare(self, args):
+        if len(args) == 1:  # Just a single value
+            return args[0]
+
+        op = args[1]
+        a, b = args[0], args[2]
+
+        # Handle number comparisons properly
+        if isinstance(a, str) and a.replace(".", "", 1).isdigit():
+            a = float(a)
+        if isinstance(b, str) and b.replace(".", "", 1).isdigit():
+            b = float(b)
+
+        if op == "==":
+            return a == b
+        if op == "!=":
+            return a != b
+        if op == "<":
+            return a < b
+        if op == ">":
+            return a > b
+        if op == "<=":
+            return a <= b
+        if op == ">=":
+            return a >= b
+        return False
+
+    # Statements
+    def if_stmt(self, args):
+        condition, block = args
+        if condition:
+            self.transform(block)
+
+    def block(self, args):
+        for stmt in args:
+            if self.should_return:
+                break
+            self.transform(stmt)
+
+    def return_stmt(self, args):
+        self.return_value = args[0]
+        self.should_return = True
+
+    def assign_stmt(self, args):
+        var_name, value = args
+        self.vars[var_name] = value
+
+    # Atoms
+    def var(self, args):
+        name = str(args[0])
+        if name in ["x", "y", "z", "time"]:
+            return self.vars.get(name, 0.0)
+        return self.vars.get(name, 0.0)
+
+    def material(self, args):
+        return str(args[0])
+
+    def NUMBER(self, token):
+        return float(token.value)
+
+    def NAME(self, token):
+        return str(token.value)
+
+
+def run_shader(code, x=0, y=0, z=0, time=0):
+    import math  # Add this at the top of the function
+
+    parser = Lark(GRAMMAR, parser="lalr")
+    interpreter = ShaderInterpreter()
+    interpreter.vars.update(
+        {"x": float(x), "y": float(y), "z": float(z), "time": float(time)}
+    )
     tree = parser.parse(code)
-    env = dict(x=x, y=y, z=z, time=time)
-    evaluator = EvalTransformer(env)
-    evaluator.transform(tree)
-    return evaluator.returned or "air"
+    interpreter.transform(tree)
+    return interpreter.return_value or "air"
