@@ -15,10 +15,10 @@ class EvalTransformer(Transformer):
         self.returned = None
 
     def number(self, token):
-        return float(token)
+        return float(token[0])
 
     def var(self, token):
-        name = str(token)
+        name = str(token[0])
         if name in self.env:
             return self.env[name]
         elif name in MATERIALS:
@@ -37,11 +37,17 @@ class EvalTransformer(Transformer):
     def div(self, items):
         return items[0] / items[1]
 
+    def comp_op(self, items):
+        if not items:
+            return None
+        return str(items[0])
+
     def compare(self, items):
         if len(items) == 1:
             return items[0]
-        left, op_token, right = items
-        op = str(op_token)
+        left, op, right = items
+        if op is None:
+            return left
         try:
             return {
                 "==": left == right,
@@ -85,6 +91,24 @@ class EvalTransformer(Transformer):
 
     def start(self, items):
         return items
+
+    def X(self, _):
+        return self.env["x"]
+
+    def Y(self, _):
+        return self.env["y"]
+
+    def Z(self, _):
+        return self.env["z"]
+
+    def TIME(self, _):
+        return self.env["time"]
+
+    def IF(self, _):
+        return "if"
+
+    def RETURN(self, _):
+        return "return"
 
 
 with open("voxel_grammar.lark") as f:
