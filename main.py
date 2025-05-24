@@ -1,101 +1,134 @@
-import dearpygui.dearpygui as dpg
-from math import sin
-from interpreter import run  # Assuming you have this module for running scripts
+from panda3d.core import *
+from direct.showbase.ShowBase import ShowBase
+from direct.task import Task
+import numpy as np
+import random
 
-# Materials and their colors
+# Material colors (R, G, B, A)
 MATERIALS = {
-    "air": (0, 0, 0, 0),  # Transparent (won't be rendered)
-    "stone": (0.5, 0.5, 0.5, 1),  # Gray
-    "water": (0, 0, 1, 0.7),  # Blue with some transparency
-    "grass": (0, 0.8, 0, 1),  # Green
-    "crystal": (0.8, 0.2, 0.8, 0.8),  # Purple with some transparency
+    "air": (0, 0, 0, 0),
+    "stone": (0.5, 0.5, 0.5, 1),
+    "water": (0, 0.5, 1, 0.7),
+    "grass": (0.2, 0.8, 0.2, 1),
+    "crystal": (0.8, 0.2, 0.8, 0.8),
 }
 
 
-def generate_grid(n=16, time=1.5):
-    script = """
-    r = x * 0.5 + sin(time) * 3;
-    if y < r {
-      return crystal;
-    }
-    return air;
-    """
+class VoxelGridApp(ShowBase):
+    def __init__(self):
+        ShowBase.__init__(self)
 
-    grid = []
-    for x in range(n):
-        for y in range(n):
-            for z in range(n):
-                mat = run(script, x, y, z, time=time)
-                grid.append((x, y, z, mat))
-    return grid
+        # Grid settings
+        self.grid_size = 16
+        self.cube_size = 0.1
 
+        # Camera controls
+        self.camera_distance = 5
+        self.camera_theta = 45  # Rotation around Y-axis
+        self.camera_phi = 30  # Rotation around X-axis
+        self.mouse_drag = False
+        self.last_mouse_pos = (0, 0)
 
-def draw_grid(grid, n=16):
-    # Clear previous drawings
-    dpg.delete_item("drawing_container", children_only=True)
+        # Disable default camera controls
+        self.disableMouse()
 
-    # Scale factor to position cubes
-    scale = 1.0 / n
+        # Setup scene
+        self.setup_scene()
+        self.generate_grid()
 
-    for x, y, z, mat in grid:
-        if mat == "air":
-            continue  # Skip air blocks
+        # Input handlers
+        self.accept("wheel_up", self.zoom, [1])
+        self.accept("wheel_down", self.zoom, [-1])
+        self.accept("mouse1", self.start_drag)
+        self.accept("mouse1-up", self.stop_drag)
+        self.taskMgr.add(self.update_camera, "update_camera")
 
-        color = MATERIALS.get(mat, (1, 0, 0, 1))  # Default to red if material not found
+    def setup_scene(self):
+        """Initialize lighting and background"""
+        self.setBackgroundColor(0.1, 0.1, 0.1)
+        self.render.setShaderAuto()
 
-        # Calculate position (centered around origin)
-        pos_x = (x - n / 2) * scale * 2
-        pos_y = (y - n / 2) * scale * 2
-        pos_z = (z - n / 2) * scale * 2
+        # Add lights
+        ambient_light = AmbientLight("ambient")
+        ambient_light.setColor((0.3, 0.3, 0.3, 1))
+        directional_light = DirectionalLight("directional")
+        directional_light.setDirection((-1, -1, -1))
+        directional_light.setColor((0.8, 0.8, 0.8, 1))
+        self.render.setLight(self.render.attachNewNode(ambient_light))
+        self.render.setLight(self.render.attachNewNode(directional_light))
 
-        # Draw cube
-        with dpg.draw_node(parent="drawing_container"):
-            dpg.draw_cube(
-                (pos_x, pos_y, pos_z),
-                (pos_x + scale, pos_y + scale, pos_z + scale),
-                color=color,
-                fill=color,
-            )
+    def generate_grid(self, time=1.5):
+        """Create voxel grid from your script"""
+        for x in range(self.grid_size):
+            for y in range(self.grid_size):
+                for z in range(self.grid_size):
+                    # Replace with your script logic
+                    r = x * 0.5 + np.sin(time) * 3
+                    mat = "crystal" if y < r else "air"
 
+                    if mat != "air":
+                        self.create_cube(x, y, z, mat)
 
-def save_callback():
-    print("Save Clicked")
+    def create_cube(self, x, y, z, material):
+        """Add a colored cube to the scene"""
+        cube = self.loader.loadModel("models/box")
+        cube.setScale(self.cube_size)
 
-
-def main():
-    dpg.create_context()
-
-    # Enable 3D mode
-    dpg.configure_app(docking=True, docking_space=True)
-    dpg.configure_app(init_file="dpg.ini")
-
-    with dpg.window(label="3D Grid Viewer", width=800, height=600):
-        with dpg.group(horizontal=True):
-            dpg.add_button(
-                label="Update",
-                callback=lambda: draw_grid(generate_grid(time=1.5)),
-            )
-            dpg.add_button(label="Save", callback=save_callback)
-
-        with dpg.drawlist(width=800, height=600, tag="drawing_container"):
-            pass  # Will be filled by draw_grid()
-
-    # Set up the 3D viewport
-    with dpg.handler_registry():
-        dpg.add_mouse_drag_handler(
-            callback=lambda s, a: dpg.set_viewport_small_icon("icon.ico")
+        # Position cube (centered at origin)
+        offset = (self.grid_size - 1) * self.cube_size / 2
+        cube.setPos(
+            x * self.cube_size - offset,
+            y * self.cube_size - offset,
+            z * self.cube_size - offset,
         )
 
-    dpg.create_viewport(title="3D Material Grid", width=800, height=600)
-    dpg.setup_dearpygui()
+        # Set material color
+        color = MATERIALS.get(material, (1, 0, 0, 1))
+        cube.setColor(color[0], color[1], color[2], color[3])
 
-    # Initial draw
-    draw_grid(generate_grid())
+        cube.reparentTo(self.render)
 
-    dpg.show_viewport()
-    dpg.start_dearpygui()
-    dpg.destroy_context()
+    def start_drag(self):
+        self.mouse_drag = True
+        self.last_mouse_pos = (
+            self.mouseWatcherNode.getMouseX(),
+            self.mouseWatcherNode.getMouseY(),
+        )
+
+    def stop_drag(self):
+        self.mouse_drag = False
+
+    def zoom(self, direction):
+        self.camera_distance = max(1, min(10, self.camera_distance - direction * 0.5))
+
+    def update_camera(self, task):
+        if self.mouse_drag:
+            mx, my = (
+                self.mouseWatcherNode.getMouseX(),
+                self.mouseWatcherNode.getMouseY(),
+            )
+            dx = mx - self.last_mouse_pos[0]
+            dy = my - self.last_mouse_pos[1]
+
+            self.camera_theta -= dx * 100
+            self.camera_phi = max(-80, min(80, self.camera_phi + dy * 100))
+
+            self.last_mouse_pos = (mx, my)
+
+        # Update camera position (spherical coordinates)
+        theta_rad = self.camera_theta * np.pi / 180
+        phi_rad = self.camera_phi * np.pi / 180
+
+        cam_x = self.camera_distance * np.sin(theta_rad) * np.cos(phi_rad)
+        cam_y = self.camera_distance * np.cos(theta_rad) * np.cos(phi_rad)
+        cam_z = self.camera_distance * np.sin(phi_rad)
+
+        self.camera.setPos(cam_x, cam_y, cam_z)
+        self.camera.lookAt(0, 0, 0)
+
+        return Task.cont
 
 
 if __name__ == "__main__":
-    main()
+    app = VoxelGridApp()
+    app.run()
