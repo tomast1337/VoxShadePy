@@ -12,18 +12,19 @@ return_stmt: "return" expr ";"
 assign_stmt: NAME "=" expr ";"
 expr_stmt: expr ";"
 
-?expr: logic
-?logic: arith (comp_op arith)?  -> compare
-?arith: arith "+" term          -> add
-       | arith "-" term          -> sub
-       | term
-?term: term "*" factor          -> mul
-      | term "/" factor          -> div
-      | factor
+?expr: comp_expr
+
+?comp_expr: arith_expr (comp_op arith_expr)*
+
+?arith_expr: term_expr (add_op term_expr)*
+
+?term_expr: factor (mul_op factor)*
+
 ?factor: func_call
         | const_atom
         | var_atom
         | material_atom
+        | NUMBER
         | "(" expr ")"
 
 func_call: ("sin"|"cos"|"noise") "(" [expr ("," expr)*] ")"
@@ -41,6 +42,9 @@ MATERIAL: "air"|"stone"|"water"|"grass"|"crystal"
          |"dirt"|"snow"|"cloud"|"glass"|"brick"|"obsidian"
 
 comp_op: "=="|"!="|"<"|">"|"<="|">="
+add_op: "+"|"-"
+mul_op: "*"|"/"
+
 NAME: /[a-zA-Z_][a-zA-Z0-9_]*/
 NUMBER: /-?\d+(\.\d+)?/
 

@@ -1,11 +1,10 @@
-from lark import Lark, Transformer, v_args
+from lark import Lark, Transformer
 import numpy as np
 
 with open("voxel_grammar.lark") as f:
     GRAMMAR = f.read()
 
 
-# Interpreter implementation
 class ShaderInterpreter(Transformer):
     def __init__(self):
         self.vars = {}
@@ -14,57 +13,57 @@ class ShaderInterpreter(Transformer):
 
     # Built-in functions
     def sin(self, args):
-        return math.sin(args[0])
+        return np.sin(args[0])
 
     def cos(self, args):
-        return math.cos(args[0])
+        return np.cos(args[0])
 
     def noise(self, args):
-        # Simple deterministic pseudo-noise
         x, y, *rest = args
         x *= 12.9898
         y *= 78.233
-        return math.fmod(math.sin(x + y) * 43758.5453, 1.0)
+        return np.fmod(np.sin(x + y) * 43758.5453, 1.0)
 
-    # Operations
-    def add(self, args):
-        return args[0] + args[1]
-
-    def sub(self, args):
-        return args[0] - args[1]
-
-    def mul(self, args):
-        return args[0] * args[1]
-
-    def div(self, args):
-        return args[0] / args[1]
-
-    def compare(self, args):
-        if len(args) == 1:  # Just a single value
+    # Expression handling
+    def comp_expr(self, args):
+        if len(args) == 1:
             return args[0]
+        result = args[0]
+        for i in range(1, len(args), 2):
+            op, right = args[i], args[i + 1]
+            if op == "==":
+                result = result == right
+            elif op == "!=":
+                result = result != right
+            elif op == "<":
+                result = result < right
+            elif op == ">":
+                result = result > right
+            elif op == "<=":
+                result = result <= right
+            elif op == ">=":
+                result = result >= right
+        return result
 
-        op = args[1]
-        a, b = args[0], args[2]
+    def arith_expr(self, args):
+        result = args[0]
+        for i in range(1, len(args), 2):
+            op, num = args[i], args[i + 1]
+            if op == "+":
+                result += num
+            elif op == "-":
+                result -= num
+        return result
 
-        # Handle number comparisons properly
-        if isinstance(a, str) and a.replace(".", "", 1).isdigit():
-            a = float(a)
-        if isinstance(b, str) and b.replace(".", "", 1).isdigit():
-            b = float(b)
-
-        if op == "==":
-            return a == b
-        if op == "!=":
-            return a != b
-        if op == "<":
-            return a < b
-        if op == ">":
-            return a > b
-        if op == "<=":
-            return a <= b
-        if op == ">=":
-            return a >= b
-        return False
+    def term_expr(self, args):
+        result = args[0]
+        for i in range(1, len(args), 2):
+            op, num = args[i], args[i + 1]
+            if op == "*":
+                result *= num
+            elif op == "/":
+                result /= num
+        return result
 
     # Statements
     def if_stmt(self, args):
@@ -104,8 +103,6 @@ class ShaderInterpreter(Transformer):
 
 
 def run_shader(code, x=0, y=0, z=0, time=0):
-    import math  # Add this at the top of the function
-
     parser = Lark(GRAMMAR, parser="lalr")
     interpreter = ShaderInterpreter()
     interpreter.vars.update(
