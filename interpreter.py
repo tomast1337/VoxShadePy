@@ -35,7 +35,7 @@ class ShaderInterpreter(Transformer):
     def __init__(self):
         self.vars = {"x": 0.0, "y": 0.0, "z": 0.0, "time": 0.0}
         self.return_value = None
-        self.return_encountered = False  # New flag to track returns
+        self.should_return = False
 
     # Constant variables
     def x_var(self, args):
@@ -119,23 +119,26 @@ class ShaderInterpreter(Transformer):
 
     # Control flow
     def if_stmt(self, args):
-        if len(args) != 2 or self.return_encountered:
+        if len(args) != 2 or self.should_return:
             return
         condition, block = args
         if condition:
             self.transform(block)
+            # Only propagate return if it occurred in this block
+            if self.should_return:
+                return
 
     def block(self, args):
         for stmt in args:
-            if self.return_encountered:
+            if self.should_return:
                 break
             self.transform(stmt)
 
     def return_stmt(self, args):
-        if not self.return_encountered:  # Only process first return
+        if not self.should_return:  # Only process first return
             self.return_value = args[0] if args else "air"
-            self.return_encountered = True
-        return self.return_value  # Return normally but set flag
+            self.should_return = True
+        return self.return_value
 
     def assign_stmt(self, args):
         var_name, value = args
@@ -170,26 +173,54 @@ class ShaderInterpreter(Transformer):
 
 
 def run_shader(code, x=0, y=0, z=0, time=0):
-    parser = Lark(GRAMMAR, parser="lalr")
+    # Create new interpreter instance for each run to ensure clean state
     interpreter = ShaderInterpreter()
+
+    # Set input variables
     interpreter.vars.update(
         {"x": float(x), "y": float(y), "z": float(z), "time": float(time)}
     )
+
+    # Parse and execute
+    parser = Lark(GRAMMAR, parser="lalr")
     tree = parser.parse(code)
     interpreter.transform(tree)
-    return interpreter.return_value if interpreter.return_encountered else "air"
+
+    # Return result with proper fallback
+    return interpreter.return_value if interpreter.should_return else "air"
 
 
-def test_shader():
+def test_chained_ifs():
+    def run_test(x, y, expected):
+        nonlocal success_count
+        result = run_shader(code, x=x, y=y, z=0, time=0)
+        print(f"Test (x={x}, y={y}): {result} ", end="")
+        if result == expected:
+            print("✓")
+            success_count += 1
+        else:
+            print(f"✗ (expected {expected})")
+
     code = """
-    if (x == 8.0) {
-        return grass;
+    if (x > 5.0) {
+        if (y < 3.0) {
+            return grass;
+        }
+        return stone;
     }
     return air;
     """
-    result = run_shader(code, x=8, y=2, z=3, time=4)
-    print(result)  # Should output "grass"
+
+    success_count = 0
+    print("\nTesting nested conditionals:")
+    run_test(8, 2, "grass")  # Both conditions true
+    run_test(8, 4, "stone")  # Outer true, inner false
+    run_test(4, 1, "air")  # Outer false
+    run_test(6, 2.9, "grass")  # Boundary case
+    run_test(5.1, 3, "stone")  # Boundary case
+
+    print(f"\nPassed {success_count}/5 tests")
 
 
 if __name__ == "__main__":
-    test_shader()
+    test_chained_ifs()
