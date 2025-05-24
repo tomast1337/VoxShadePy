@@ -34,8 +34,12 @@ class ShaderInterpreter(Transformer):
 
     def __init__(self):
         self.vars = {"x": 0.0, "y": 0.0, "z": 0.0, "time": 0.0}
-        self.return_value = None
-        self.should_return = False
+        self.return_stack = []
+        self.debug = True
+
+    def log(self, *args):
+        if self.debug:
+            print("DEBUG:", *args)
 
     # Constant variables
     def x_var(self, args):
@@ -119,26 +123,22 @@ class ShaderInterpreter(Transformer):
 
     # Control flow
     def if_stmt(self, args):
-        if len(args) != 2 or self.should_return:
-            return
         condition, block = args
         if condition:
-            self.transform(block)
-            # Only propagate return if it occurred in this block
-            if self.should_return:
-                return
+            # Execute block and capture if it returned
+            returned = self.transform(block)
+            if returned is not None:  # If block contained a return statement
+                return returned
 
     def block(self, args):
         for stmt in args:
-            if self.should_return:
-                break
-            self.transform(stmt)
+            result = self.transform(stmt)
+            if result is not None:  # If statement was a return
+                return result
+        return None
 
     def return_stmt(self, args):
-        if not self.should_return:  # Only process first return
-            self.return_value = args[0] if args else "air"
-            self.should_return = True
-        return self.return_value
+        return args[0] if args else "air"
 
     def assign_stmt(self, args):
         var_name, value = args
@@ -173,21 +173,14 @@ class ShaderInterpreter(Transformer):
 
 
 def run_shader(code, x=0, y=0, z=0, time=0):
-    # Create new interpreter instance for each run to ensure clean state
     interpreter = ShaderInterpreter()
-
-    # Set input variables
     interpreter.vars.update(
         {"x": float(x), "y": float(y), "z": float(z), "time": float(time)}
     )
-
-    # Parse and execute
     parser = Lark(GRAMMAR, parser="lalr")
     tree = parser.parse(code)
-    interpreter.transform(tree)
-
-    # Return result with proper fallback
-    return interpreter.return_value if interpreter.should_return else "air"
+    result = interpreter.transform(tree)
+    return result if result is not None else "air"
 
 
 def test_chained_ifs():
@@ -210,6 +203,19 @@ def test_chained_ifs():
     }
     return air;
     """
+
+    parser = Lark(GRAMMAR, parser="lalr")
+    code = """
+    if (x > 5.0) {
+        if (y < 3.0) {
+            return grass;
+        }
+        return stone;
+    }
+    return air;
+    """
+    print("Parse tree:")
+    print(parser.parse(code).pretty())
 
     success_count = 0
     print("\nTesting nested conditionals:")
