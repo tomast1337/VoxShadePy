@@ -5,6 +5,32 @@ with open("voxel_grammar.lark") as f:
     GRAMMAR = f.read()
 
 
+class ReturnSignal(Exception):
+    """Signal to break out of execution when return is encountered"""
+
+    pass
+
+
+MATERIALS = {
+    "air",
+    "stone",
+    "water",
+    "grass",
+    "crystal",
+    "sand",
+    "wood",
+    "metal",
+    "lava",
+    "ice",
+    "dirt",
+    "snow",
+    "cloud",
+    "glass",
+    "brick",
+    "obsidian",
+}
+
+
 class ShaderInterpreter(Transformer):
     def __init__(self):
         self.vars = {"x": 0.0, "y": 0.0, "z": 0.0, "time": 0.0}
@@ -35,7 +61,10 @@ class ShaderInterpreter(Transformer):
     def material(self, args):
         if not args:
             return "air"
-        return str(args[0])
+        material_name = str(args[0])
+        print(f"Material resolved: {material_name}")  # Debug
+        # Return as string wrapped in a list to maintain consistency
+        return [material_name]
 
     # Built-in functions
     def sin(self, args):
@@ -117,19 +146,43 @@ class ShaderInterpreter(Transformer):
 
     # Statements
     def if_stmt(self, args):
+        if len(args) != 2:
+            return
         condition, block = args
         if condition:
+            # Execute the block and capture any return value
             self.transform(block)
 
     def block(self, args):
-        for stmt in args:
-            if self.should_return:
-                break
+        print(f"Executing block with {len(args)} statements")
+        for i, stmt in enumerate(args):
+            print(f"  Executing statement {i}")
             self.transform(stmt)
+            if self.return_value is not None:
+                print(f"  Early exit due to return: {self.return_value}")
+                break
 
     def return_stmt(self, args):
-        self.return_value = args[0]
-        self.should_return = True
+        if not args:
+            self.return_value = "air"
+            return
+
+        # Handle both direct materials and expressions
+        return_value = args[0]
+        if isinstance(return_value, list) and len(return_value) == 1:
+            return_value = return_value[0]
+
+        print(
+            f"Return statement processing: {return_value} (type: {type(return_value)})"
+        )  # Debug
+
+        if isinstance(return_value, str) and return_value in MATERIALS:
+            self.return_value = return_value
+        else:
+            # For non-material returns, convert to string
+            self.return_value = str(return_value)
+
+        print(f"Set return value to: {self.return_value}")  # Debug
 
     def assign_stmt(self, args):
         var_name, value = args
@@ -162,7 +215,7 @@ class ShaderInterpreter(Transformer):
         return ">="
 
 
-def run_shader(code, x=0, y=0, z=0, time=0):
+def run_shader(code, x: float = 0, y: float = 0, z: float = 0, time: float = 0):
     parser = Lark(GRAMMAR, parser="lalr")
     interpreter = ShaderInterpreter()
     interpreter.vars.update(

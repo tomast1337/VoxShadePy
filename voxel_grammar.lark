@@ -35,12 +35,12 @@ const_var: "x" -> x_var
          | "time" -> time_var
 
 var: NAME -> var
-material: MATERIAL -> material
 
+material: MATERIAL -> material
 MATERIAL: "air"|"stone"|"water"|"grass"|"crystal"
          |"sand"|"wood"|"metal"|"lava"|"ice"
          |"dirt"|"snow"|"cloud"|"glass"|"brick"|"obsidian"
-
+         
 comp_op: "==" -> eq_op
        | "!=" -> neq_op
        | "<" -> lt_op
