@@ -30,13 +30,24 @@ expr_stmt: expr ";"
 func_call: NAME "(" [expr ("," expr)*] ")"
 
 ?atom: NUMBER                   -> number
-     | NAME                     -> var
+     | MATERIAL                -> var
+     | NAME                    -> var
      | "(" expr ")"
 
 comp_op: "==" | "!=" | "<" | ">" | "<=" | ">="
 
-NAME: /(?!if|return)\b[a-zA-Z_][a-zA-Z0-9_]*\b/
-NUMBER: /\d+(\.\d+)?/
+MATERIAL: "air" | "stone" | "water" | "grass" | "crystal"
+
+X: "x"
+Y: "y"
+Z: "z"
+TIME: "time"
+IF: "if"
+RETURN: "return"
+
+NAME: /[a-zA-Z_][a-zA-Z0-9_]*/
+
+NUMBER: /-?\d+(\.\d+)?/
 
 %ignore /\s+/
 %ignore /\/\/[^\n]*/
