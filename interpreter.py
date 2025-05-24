@@ -57,14 +57,19 @@ class ShaderInterpreter(Transformer):
         name = str(args[0])
         return self.vars.get(name, 0.0)
 
-    # Material
+    def material_expr(self, args):
+        """Handle material expressions explicitly"""
+        if not args:
+            return "air"
+        return args[0]  # Return the material name directly
+
     def material(self, args):
+        """Convert material token to string"""
         if not args:
             return "air"
         material_name = str(args[0])
-        print(f"Material resolved: {material_name}")  # Debug
-        # Return as string wrapped in a list to maintain consistency
-        return [material_name]
+        print(f"Material resolved: {material_name}")
+        return material_name  # Return as plain string
 
     # Built-in functions
     def sin(self, args):
@@ -154,35 +159,33 @@ class ShaderInterpreter(Transformer):
             self.transform(block)
 
     def block(self, args):
-        print(f"Executing block with {len(args)} statements")
-        for i, stmt in enumerate(args):
-            print(f"  Executing statement {i}")
+        """Execute block statements with return tracking"""
+        for stmt in args:
             self.transform(stmt)
-            if self.return_value is not None:
-                print(f"  Early exit due to return: {self.return_value}")
+            if self.should_return:
                 break
 
     def return_stmt(self, args):
+        """Process return statements with proper type handling"""
         if not args:
             self.return_value = "air"
             return
 
-        # Handle both direct materials and expressions
         return_value = args[0]
-        if isinstance(return_value, list) and len(return_value) == 1:
-            return_value = return_value[0]
+        print(f"Raw return value: {return_value} (type: {type(return_value)})")
 
-        print(
-            f"Return statement processing: {return_value} (type: {type(return_value)})"
-        )  # Debug
-
+        # Handle material returns
         if isinstance(return_value, str) and return_value in MATERIALS:
             self.return_value = return_value
+        # Handle numeric returns
+        elif isinstance(return_value, (int, float)):
+            self.return_value = str(return_value)
+        # Handle all other cases
         else:
-            # For non-material returns, convert to string
             self.return_value = str(return_value)
 
-        print(f"Set return value to: {self.return_value}")  # Debug
+        print(f"Final return value set to: {self.return_value}")
+        self.should_return = True
 
     def assign_stmt(self, args):
         var_name, value = args
