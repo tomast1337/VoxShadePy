@@ -31,11 +31,21 @@ MATERIALS = {
 
 
 class ShaderInterpreter(Transformer):
-
     def __init__(self):
         self.vars = {"x": 0.0, "y": 0.0, "z": 0.0, "time": 0.0}
-        self.result = None
-        self.execution_stack = []
+        self.return_value = None
+        self.active_blocks = []
+        self.debug = True  # Set to False after verification
+
+    def start(self, tokens):
+        for token in tokens:
+            if self.debug:
+                print(f"Processing token: {token}")
+            self.transform(token)
+            if self.return_value is not None:
+                if self.debug:
+                    print(f"Stopping start due to return_value: {self.return_value}")
+                break
 
     def log(self, *args):
         if self.debug:
@@ -123,42 +133,70 @@ class ShaderInterpreter(Transformer):
 
     # Control flow
     def if_stmt(self, args):
-        if self.result is not None:
-            return
-
         condition, block = args
+        if self.debug:
+            print(
+                f"Evaluating if condition: {condition}, active_blocks: {self.active_blocks}"
+            )
         if condition:
-            self.execution_stack.append(True)
-            self.transform(block)
-            self.execution_stack.pop()
+            self.active_blocks.append(True)
+            try:
+                self.transform(block)
+            finally:
+                self.active_blocks.pop()
         else:
-            self.execution_stack.append(False)
-            self.transform(block)  # Still parse for syntax checking
-            self.execution_stack.pop()
+            if self.debug:
+                print(
+                    f"Skipping block due to false condition, active_blocks: {self.active_blocks + [False]}"
+                )
+            self.active_blocks.append(False)
+            self.active_blocks.pop()
 
     def block(self, args):
-        if self.result is not None:
+        if not all(self.active_blocks):
+            if self.debug:
+                print(f"Skipping block, active_blocks: {self.active_blocks}")
             return
 
-        # Check if current execution context is active
-        if len(self.execution_stack) > 0 and not self.execution_stack[-1]:
-            return
-
+        if self.debug:
+            print(f"Executing block, active_blocks: {self.active_blocks}")
         for stmt in args:
+            if self.debug:
+                print(f"Processing statement: {stmt}")
             self.transform(stmt)
-            if self.result is not None:
+            if self.return_value is not None:
+                if self.debug:
+                    print(
+                        f"Stopping block execution due to return_value: {self.return_value}"
+                    )
                 break
 
     def return_stmt(self, args):
-        # Only return if we're in an active execution context
-        if len(self.execution_stack) == 0 or self.execution_stack[-1]:
-            if self.result is None:
-                self.result = args[0] if args else "air"
+        value = args[0] if args else "air"
+        if all(self.active_blocks) or not self.active_blocks:
+            if self.return_value is None:
+                self.return_value = value
+                if self.debug:
+                    print(
+                        f"Setting return_value to {self.return_value}, active_blocks: {self.active_blocks}"
+                    )
+            else:
+                if self.debug:
+                    print(
+                        f"Ignoring return of {value} as return_value already set to {self.return_value}"
+                    )
+        else:
+            if self.debug:
+                print(
+                    f"Skipping return of {value}, inactive block, active_blocks: {self.active_blocks}"
+                )
 
     def assign_stmt(self, args):
         var_name, value = args
         if var_name not in ["x", "y", "z", "time"]:
             self.vars[var_name] = value
+            if self.debug:
+                print(f"Assigned {var_name} = {value}")
 
     # Token handling
     def NUMBER(self, token):
@@ -193,7 +231,7 @@ def run_shader(code, x=0, y=0, z=0, time=0):
     parser = Lark(GRAMMAR, parser="lalr")
     tree = parser.parse(code)
     interpreter.transform(tree)
-    return interpreter.result if interpreter.result is not None else "air"
+    return interpreter.return_value if interpreter.return_value is not None else "air"
 
 
 def test_chained_ifs():
@@ -218,15 +256,6 @@ def test_chained_ifs():
     """
 
     parser = Lark(GRAMMAR, parser="lalr")
-    code = """
-    if (x > 5.0) {
-        if (y < 3.0) {
-            return grass;
-        }
-        return stone;
-    }
-    return air;
-    """
     print("Parse tree:")
     print(parser.parse(code).pretty())
 
@@ -243,3 +272,4 @@ def test_chained_ifs():
 
 if __name__ == "__main__":
     test_chained_ifs()
+    print("All tests completed.")
