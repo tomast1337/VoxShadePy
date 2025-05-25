@@ -40,12 +40,13 @@ class ShaderInterpreter(Transformer):
     def start(self, tokens):
         for token in tokens:
             if self.debug:
-                print(f"Processing token: {token}")
+                print(f"Processing start token: {token}")
             self.transform(token)
             if self.return_value is not None:
                 if self.debug:
                     print(f"Stopping start due to return_value: {self.return_value}")
                 break
+        return self.return_value
 
     def log(self, *args):
         if self.debug:
@@ -134,29 +135,31 @@ class ShaderInterpreter(Transformer):
     # Control flow
     def if_stmt(self, args):
         condition, block = args
+        condition_value = self.transform(condition)
         if self.debug:
             print(
-                f"Evaluating if condition: {condition}, active_blocks: {self.active_blocks}"
+                f"Evaluating if condition: {condition_value}, active_blocks: {self.active_blocks}"
             )
-        if condition:
+        if condition_value:
             self.active_blocks.append(True)
             try:
                 self.transform(block)
             finally:
                 self.active_blocks.pop()
         else:
+            self.active_blocks.append(False)
             if self.debug:
                 print(
-                    f"Skipping block due to false condition, active_blocks: {self.active_blocks + [False]}"
+                    f"Skipping block due to false condition, active_blocks: {self.active_blocks}"
                 )
-            self.active_blocks.append(False)
             self.active_blocks.pop()
+        return None
 
     def block(self, args):
         if not all(self.active_blocks):
             if self.debug:
                 print(f"Skipping block, active_blocks: {self.active_blocks}")
-            return
+            return None
 
         if self.debug:
             print(f"Executing block, active_blocks: {self.active_blocks}")
@@ -170,6 +173,7 @@ class ShaderInterpreter(Transformer):
                         f"Stopping block execution due to return_value: {self.return_value}"
                     )
                 break
+        return None
 
     def return_stmt(self, args):
         value = args[0] if args else "air"
@@ -190,6 +194,7 @@ class ShaderInterpreter(Transformer):
                 print(
                     f"Skipping return of {value}, inactive block, active_blocks: {self.active_blocks}"
                 )
+        return None
 
     def assign_stmt(self, args):
         var_name, value = args
@@ -197,6 +202,7 @@ class ShaderInterpreter(Transformer):
             self.vars[var_name] = value
             if self.debug:
                 print(f"Assigned {var_name} = {value}")
+        return None
 
     # Token handling
     def NUMBER(self, token):
@@ -236,6 +242,7 @@ def run_shader(code, x=0, y=0, z=0, time=0):
 
 def test_chained_ifs():
     def run_test(x, y, expected):
+        print(f"\n\n\nRunning test with x={x}, y={y}, expected={expected}...")
         nonlocal success_count
         result = run_shader(code, x=x, y=y, z=0, time=0)
         print(f"Test (x={x}, y={y}): {result} ", end="")
@@ -260,14 +267,14 @@ def test_chained_ifs():
     print(parser.parse(code).pretty())
 
     success_count = 0
-    print("\nTesting nested conditionals:")
+    print("\nTesting nested conditionals:\n\n\n")
     run_test(8, 2, "grass")  # Both conditions true
     run_test(8, 4, "stone")  # Outer true, inner false
     run_test(4, 1, "air")  # Outer false
     run_test(6, 2.9, "grass")  # Boundary case
     run_test(5.1, 3, "stone")  # Boundary case
 
-    print(f"\nPassed {success_count}/5 tests")
+    print(f"\n\n\nPassed {success_count}/5 tests")
 
 
 if __name__ == "__main__":
