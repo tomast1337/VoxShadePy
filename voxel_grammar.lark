@@ -1,58 +1,57 @@
 ?start: statement+
 
-?statement: if_stmt
-          | return_stmt
-          | assign_stmt
-          | expr_stmt
+?statement: assignment ";"
+          | if_statement
+          | func_decl
+          | return_statement ";"
+          | expr ";"
+          | block
 
-if_stmt: "if" expr block
 block: "{" statement* "}"
 
-return_stmt: "return" expr ";"
-assign_stmt: NAME "=" expr ";"
-expr_stmt: expr ";"
+assignment: NAME "=" expr
 
-?expr: comp_expr
+?expr: or_expr
 
-?comp_expr: arith_expr (comp_op arith_expr)*
+?or_expr: and_expr
+        | or_expr "or" and_expr -> or_
 
-?arith_expr: term_expr (add_op term_expr)*
+?and_expr: not_expr
+         | and_expr "and" not_expr -> and_
 
-?term_expr: factor (mul_op factor)*
+?not_expr: "not" not_expr -> not_
+         | comparison
 
-?factor: func_call
-        | const_var
-        | material
-        | var
-        | NUMBER
-        | "(" expr ")"
+?comparison: math_expr
+           | comparison ">" math_expr  -> gt
+           | comparison "<" math_expr  -> lt
+           | comparison ">=" math_expr -> ge
+           | comparison "<=" math_expr -> le
+           | comparison "==" math_expr -> eq
+           | comparison "!=" math_expr -> ne
 
-func_call: ("sin"|"cos"|"noise") "(" [expr ("," expr)*] ")"
+?math_expr: math_expr "+" math_expr -> add
+          | math_expr "-" math_expr -> sub
+          | math_expr "*" math_expr -> mul
+          | math_expr "/" math_expr -> div
+          | atom
 
-const_var: "x" -> x_var
-         | "y" -> y_var
-         | "z" -> z_var
-         | "time" -> time_var
+?atom: func_call
+     | NUMBER            -> number
+     | NAME              -> var
+     | "(" expr ")"
 
-var: NAME -> var
+func_call: NAME "(" [expr ("," expr)*] ")"
 
-material: MATERIAL -> material
-MATERIAL: "air"|"stone"|"water"|"grass"|"crystal"
-         |"sand"|"wood"|"metal"|"lava"|"ice"
-         |"dirt"|"snow"|"cloud"|"glass"|"brick"|"obsidian"
+if_statement: "if" "(" expr ")" statement ("else" statement)?
 
-comp_op: "==" -> eq_op
-       | "!=" -> neq_op
-       | "<" -> lt_op
-       | ">" -> gt_op
-       | "<=" -> lte_op
-       | ">=" -> gte_op
+func_decl: "func" NAME "(" [param_list] ")" block
 
-add_op: "+"|"-"
-mul_op: "*"|"/"
+param_list: NAME ("," NAME)*
 
-NAME: /(?!(air|stone|water|grass|crystal|sand|wood|metal|lava|ice|dirt|snow|cloud|glass|brick|obsidian)\b)[a-zA-Z_][a-zA-Z0-9_]*/
-NUMBER: /-?\d+(\.\d+)?/
+return_statement: "return" expr
 
-%ignore /\s+/
-%ignore /\/\/[^\n]*/
+%import common.CNAME -> NAME
+%import common.NUMBER
+%import common.WS
+%ignore WS
